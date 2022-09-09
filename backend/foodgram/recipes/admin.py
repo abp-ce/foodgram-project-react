@@ -42,6 +42,7 @@ class RecipeAdmin(admin.ModelAdmin):
 
 admin.site.register(Tag)
 admin.site.register(Favorite)
+admin.site.register(RecipeIngredient)
 admin.site.register(ShoppingCart)
 
 # admin.site.register(RecipeIngredient)

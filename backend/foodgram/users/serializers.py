@@ -1,14 +1,7 @@
 from rest_framework import serializers
 
-from .models import User
-
-
-class EmptyUserSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(required=False)
-
-    class Meta:
-        model = User
-        fields = ('id',)
+from .models import Follow, User
+from core.utils import create_template
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -39,3 +32,11 @@ class UserCreateSerializer(serializers.ModelSerializer):
                   'password')
         read_only_fields = ('id',)
 
+
+class FollowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Follow
+        fields = '__all__'
+
+    def create(self, validated_data):
+        return create_template(self.Meta.model, validated_data)

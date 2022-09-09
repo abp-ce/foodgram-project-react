@@ -1,4 +1,3 @@
-from django.db.utils import IntegrityError
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status, viewsets
@@ -7,11 +6,12 @@ from rest_framework.permissions import (IsAuthenticated,
                                         IsAuthenticatedOrReadOnly)
 from rest_framework.response import Response
 
-from .serializers import (EmptyRecipeSerializer, IngredientSerializer,
+from .serializers import (FavoriteSerializer, IngredientSerializer,
                           RecipeForUserSerializer, RecipeIngredientSerializer,
                           RecipeReadSerializer, RecipeSerializer,
-                          TagSerializer)
+                          ShoppingCartSerializer, TagSerializer)
 from core.filters import IngredientFilter, RecipeFilter
+from core.permissions import IsOwnerOrReadOnly
 from core.utils import pdf_buffer
 from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 
@@ -30,31 +30,11 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
+    queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly & IsOwnerOrReadOnly]
     filterset_fields = ()
     filterset_class = RecipeFilter
-
-    def get_queryset(self):
-        fav = self.request.query_params.get('is_favorited', None)
-        if fav == '1':
-            if self.request.auth:
-                ids = Favorite.objects.filter(
-                    user=self.request.user
-                ).values('recipe')
-                return Recipe.objects.filter(pk__in=ids).all()
-            else:
-                return None
-        cart = self.request.query_params.get('is_in_shopping_cart', None)
-        if cart == '1':
-            if self.request.auth:
-                ids = ShoppingCart.objects.filter(
-                    user=self.request.user
-                ).values('recipe')
-                return Recipe.objects.filter(pk__in=ids).all()
-            else:
-                return None
-        return Recipe.objects.all()
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -63,7 +43,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return RecipeSerializer
         elif self.action in ['favorite', 'shopping_cart']:
-            return EmptyRecipeSerializer
+            return serializers.Serializer
         elif self.action in ['download_shopping_cart']:
             return IngredientSerializer
 
@@ -93,35 +73,30 @@ class RecipeViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(page, many=True)
         return self.get_paginated_response(serializer.data)
 
-    def action_template(self, request, pk, model):
-        recipe = Recipe.objects.get(pk=pk)
+    def action_template(self, request, pk, model, serializer):
+        recipe = get_object_or_404(Recipe, pk=pk)
         if request.method == 'DELETE':
-            try:
-                to_delete = get_object_or_404(
-                    model,
-                    user=request.user,
-                    recipe=recipe
-                )
-                to_delete.delete()
-            except IntegrityError as err:
-                raise serializers.ValidationError({'errors': err})
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        try:
-            model.objects.create(
+            get_object_or_404(
+                model,
                 user=request.user,
                 recipe=recipe
-            )
-        except IntegrityError as err:
-            raise serializers.ValidationError({'errors': err})
-        serializer = RecipeForUserSerializer(recipe)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            ).delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        ser = serializer(data={'user': request.user.pk, 'recipe': recipe.pk})
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(
+            RecipeForUserSerializer(recipe).data,
+            status=status.HTTP_200_OK
+        )
 
     @action(methods=['post', 'delete'], detail=True,
-            permission_classes=[IsAuthenticated])
+            permission_classes=[IsAuthenticated & IsOwnerOrReadOnly])
     def favorite(self, request, pk):
-        return self.action_template(request, pk, Favorite)
+        return self.action_template(request, pk, Favorite, FavoriteSerializer)
 
     @action(methods=['post', 'delete'], detail=True,
-            permission_classes=[IsAuthenticated])
+            permission_classes=[IsAuthenticated & IsOwnerOrReadOnly])
     def shopping_cart(self, request, pk):
-        return self.action_template(request, pk, ShoppingCart)
+        return self.action_template(request, pk, ShoppingCart,
+                                    ShoppingCartSerializer)

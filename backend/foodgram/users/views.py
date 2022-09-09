@@ -1,4 +1,3 @@
-from django.db.utils import IntegrityError
 from django.shortcuts import get_object_or_404
 from djoser.views import UserViewSet
 from rest_framework import serializers, status
@@ -7,8 +6,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Follow, User
-from .serializers import EmptyUserSerializer
+from .serializers import FollowSerializer
 from api.serializers import UserWithRecipesSerializer
+from core.permissions import IsOwnerOrReadOnly
 
 
 class FoodgramUserViewSet(UserViewSet):
@@ -43,40 +43,35 @@ class FoodgramUserViewSet(UserViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = UserWithRecipesSerializer(
-            page,
+            user_list,
             many=True,
             context={
                 'request': request,
                 'recipes_limit': recipes_limit
             }
         )
-        return self.get_paginated_response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(methods=['post', 'delete'], detail=True,
-            permission_classes=[IsAuthenticated],
-            serializer_class=EmptyUserSerializer)
+            permission_classes=[IsAuthenticated & IsOwnerOrReadOnly],
+            serializer_class=serializers.Serializer)
     def subscribe(self, request, id):
-        author = User.objects.get(pk=id)
+        author = get_object_or_404(User, pk=id)
         if request.method == 'DELETE':
-            try:
-                to_delete = get_object_or_404(
-                    Follow,
-                    user=request.user,
-                    author=author
-                )
-                to_delete.delete()
-            except IntegrityError as err:
-                raise serializers.ValidationError({'errors': err})
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        try:
-            Follow.objects.create(
+            get_object_or_404(
+                Follow,
                 user=request.user,
                 author=author
-            )
-        except IntegrityError as err:
-            raise serializers.ValidationError({'errors': err})
-        serializer = UserWithRecipesSerializer(
-            author,
-            context={'request': request}
+            ).delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        ser = FollowSerializer(data={'user': request.user.pk,
+                               'author': author.pk})
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(
+            UserWithRecipesSerializer(
+                author,
+                context={'request': request}
+            ).data,
+            status=status.HTTP_200_OK
         )
-        return Response(serializer.data, status=status.HTTP_200_OK)
