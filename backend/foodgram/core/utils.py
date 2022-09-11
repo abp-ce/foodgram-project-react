@@ -38,7 +38,7 @@ def pdf_buffer(jdata):
     for ing in merge_fields(jdata):
         c.drawString(40, y, (f'- {ing["name"]} ({ing["measurement_unit"]})'
                      f' - {ing["amount"]}'))
-        y += d
+        y -= d
     c.showPage()
     c.save()
     buffer.seek(0)

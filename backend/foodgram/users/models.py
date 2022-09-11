@@ -9,7 +9,7 @@ class User(AbstractUser):
                                  null=False)
     email = models.EmailField('Email', unique=True)
 
-    REQUIRED_FIELDS = ['first_name', 'last_name', 'password']
+    REQUIRED_FIELDS = ['first_name', 'last_name', 'email', 'password']
 
 
 class Follow(models.Model):

@@ -21,7 +21,7 @@ class Command(BaseCommand):
             Ingredient.objects.all().delete()
             Measurement.objects.all().delete()
             return
-        with open('../../data/ingredients.json', 'r') as f:
+        with open('./data/ingredients.json', 'r') as f:
             ings = json.load(f)
         for ing in ings:
             unit, _ = Measurement.objects.get_or_create(
