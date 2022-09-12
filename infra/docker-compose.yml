@@ -1,13 +1,6 @@
 version: '3.3'
 services:
 
-#   frontend:
-#     build:
-#       context: ../frontend
-#       dockerfile: Dockerfile
-#     volumes:
-#       - ../frontend/:/app/result_build/
-
   psql:
     image: postgres:alpine
     volumes:
